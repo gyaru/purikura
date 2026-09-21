@@ -2,6 +2,18 @@
   "name": "purikura-tests",
   "private": true,
   "type": "module",
-  "scripts": {"test": "node --experimental-vm-modules --import ./tests/browser-env.mjs --test tests/*.test.mjs"},
-  "devDependencies": {"react": "19.1.0", "react-test-renderer": "19.1.0", "@tanstack/react-query": "5.90.2", "nanostores": "1.0.1", "@nanostores/react": "1.0.0"}
+  "scripts": {
+    "test:browser": "node tests/browser.e2e.mjs",
+    "test": "node --experimental-vm-modules --import ./tests/browser-env.mjs --test tests/*.test.mjs"
+  },
+  "devDependencies": {
+    "@nanostores/react": "1.0.0",
+    "@playwright/test": "1.55.1",
+    "@tabler/icons-react": "3.35.0",
+    "@tanstack/react-query": "5.90.2",
+    "nanostores": "1.0.1",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "react-test-renderer": "19.1.0"
+  }
 }

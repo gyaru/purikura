@@ -100,48 +100,71 @@ function useRoster(controller) {
     refetchOnWindowFocus:true,staleTime:0,retry:1})
   return {state,query}
 }
+const rowStyle = {display:'flex',alignItems:'center',gap:12,flexWrap:'wrap'}
+const muted = {color:'var(--ui-text-secondary)',fontSize:12,lineHeight:1.6}
+const cardStyle = {border:'1px solid var(--ui-stroke-secondary)',borderRadius:8,padding:20}
 function ConnectionState({state,query}) {
-  const text = !state.scope ? 'Gateway/profile unavailable' : state.status === 'error'
-    ? `People unavailable: ${state.error}. Check the backend plugin and connection.`
-    : state.status === 'loading' ? 'Connecting to shared People…'
-    : `Shared roster connected${query.isFetching ? ' · refreshing…' : ' · refreshes every 5 seconds'}`
-  return jsxs('div',{role:state.status==='error'?'alert':'status',children:[text,' ',
-    jsx(Button,{onClick:()=>void query.refetch(),children:'Refresh',disabled:!state.scope})]})
+  const text = !state.scope ? 'Connect a gateway to manage people.' : state.status === 'error'
+    ? `People unavailable: ${state.error}` : state.status === 'loading' ? 'Connecting…' : 'Shared roster · synced automatically'
+  return jsxs('div',{style:{...rowStyle,...muted,justifyContent:'space-between'},children:[
+    jsx('span',{role:state.status==='error'?'alert':'status',children:text}),
+    jsx(Button,{variant:'ghost',size:'sm',onClick:()=>void query.refetch(),children:'Refresh',disabled:!state.scope || query.isFetching})]})
 }
 function Picker({controller}) {
-  const {state,query}=useRoster(controller)
+  const {state}=useRoster(controller)
   const missing = state.selected && !state.people.some(p=>p.id===state.selected)
-  return jsxs('div',{className:'flex items-center gap-2 text-(--ui-text-secondary)',children:[
-    jsx('select',{'aria-label':'Active person',value:missing?'':state.selected || '',
-      onChange:event=>controller.choose(event.currentTarget.value,state.scope),children:[
-        jsx('option',{value:'',children:missing?'Selected person unavailable — choose again':'Choose person'},'empty'),
-        ...state.people.map(p=>jsx('option',{value:p.id,children:p.display_name},p.id))]}),
-    jsx(Button,{onClick:()=>host.navigate(PATH),children:'People'}),
-    jsx(ConnectionState,{state,query})]})
+  return jsx('select',{'aria-label':'Active person',title:state.error || 'Who’s speaking? Manage the roster in People.',
+    style:{font:'inherit',fontSize:12,color:'var(--ui-text-secondary)',background:'var(--ui-bg-primary)',
+      border:'none',borderRadius:4,padding:'1px 6px',maxWidth:160,height:22,cursor:'pointer'},
+    value:missing?'':state.selected || '',onChange:event=>controller.choose(event.currentTarget.value,state.scope),children:[
+      jsx('option',{value:'',disabled:true,children:missing?'Choose again':'Choose person'},'empty'),
+      ...state.people.map(p=>jsx('option',{value:p.id,children:p.display_name},p.id))]})
 }
-function RenamePerson({person,save,pending}) {
+function RenamePerson({person,save,pending,selected,choose}) {
   const [name,setName]=useState(person.display_name)
+  const [editing,setEditing]=useState(false)
   useEffect(()=>setName(person.display_name),[person.display_name])
-  return jsxs('div',{className:'flex gap-2 items-center',children:[
-    jsx(Input,{'aria-label':`Name for ${person.id}`,value:name,maxLength:80,onChange:e=>setName(e.target.value)}),
-    jsx(Button,{'aria-label':`Rename ${person.id}`,disabled:pending || !validName(name),onClick:()=>save({id:person.id,name}),children:'Rename'})]})
+  const submit=()=>save({id:person.id,name},{onSuccess:()=>setEditing(false)})
+  return jsxs('li',{style:{...rowStyle,padding:'14px 0',borderBottom:'1px solid var(--ui-stroke-secondary)'},children:[
+    jsx('span',{'aria-hidden':true,style:{width:32,height:32,flexShrink:0,display:'grid',placeItems:'center',borderRadius:6,
+      background:'var(--ui-bg-quaternary)',color:'var(--ui-text-secondary)',fontWeight:600},children:person.display_name.slice(0,1).toUpperCase()}),
+    editing ? jsxs('form',{style:{...rowStyle,flex:1},onSubmit:e=>{e.preventDefault();if(validName(name)&&!pending)submit()},children:[
+      jsx('label',{htmlFor:`rename-${person.id}`,style:muted,children:'Display name'}),
+      jsx(Input,{id:`rename-${person.id}`,'aria-label':`Name for ${person.id}`,style:{flex:1,minWidth:100},autoFocus:true,value:name,maxLength:80,onChange:e=>setName(e.target.value)}),
+      jsx(Button,{type:'button',size:'sm','aria-label':`Rename ${person.id}`,disabled:pending || !validName(name),onClick:submit,children:'Save'}),
+      jsx(Button,{type:'button',variant:'ghost',size:'sm',disabled:pending,onClick:()=>{setName(person.display_name);setEditing(false)},children:'Cancel'})]})
+    : jsxs('div',{style:{...rowStyle,flex:1,minWidth:0},children:[
+      jsx('span',{style:{flex:'1 1 100px',minWidth:100,overflowWrap:'anywhere',fontWeight:500},children:person.display_name}),
+      jsx(Button,{variant:'ghost',size:'sm',disabled:pending,onClick:choose,children:selected?'Active on this device':'Use'}),
+      jsx(Button,{variant:'ghost',size:'sm','aria-label':`Edit ${person.display_name}`,onClick:()=>setEditing(true),children:'Rename'})]})]})
 }
 function People({controller}) {
   const {state,query}=useRoster(controller)
+  return jsx(PeopleForm,{controller,state,query},state.scope || 'unconnected')
+}
+function PeopleForm({controller,state,query}) {
   const [name,setName]=useState('')
   const mutation=useMutation({mutationFn:({id,name})=>controller.savePerson(id,name,state.scope)})
-  return jsxs('section',{className:'p-4 space-y-4 text-(--ui-text-secondary)',children:[
-    jsx('h1',{children:'People · Purikura'}),
-    jsx('p',{children:'Names are shared by clients connected to this gateway/profile. The active person is remembered only on this device for that scope. Manual selection is not authentication; it does not isolate memory or sessions.'}),
-    jsx(ConnectionState,{state,query}),
-    jsx(Picker,{controller}),
-    ...state.people.map(person=>jsx(RenamePerson,{person,save:mutation.mutate,pending:mutation.isPending},`${state.scope}:${person.id}`)),
-    jsxs('div',{className:'flex gap-2',children:[
-      jsx(Input,{'aria-label':'New person name',value:name,maxLength:80,onChange:e=>setName(e.target.value)}),
-      jsx(Button,{'aria-label':'Create person',disabled:mutation.isPending || !state.scope || !validName(name),
-        onClick:()=>mutation.mutate({id:`person:${globalThis.crypto.randomUUID().replaceAll('-','')}`,name},{onSuccess:()=>setName('')}),children:'Create person'})]}),
-    mutation.isError ? jsx('p',{role:'alert',children:`Save failed: ${mutation.error.message}`}) : null,
-    mutation.isSuccess ? jsx('p',{role:'status',children:'Saved to shared People.'}) : null]})
+  const create=()=>{if(validName(name)&&!mutation.isPending)mutation.mutate({id:`person:${globalThis.crypto.randomUUID().replaceAll('-','')}`,name},{onSuccess:()=>setName('')})}
+  return jsxs('section',{'aria-label':'People settings',style:{maxWidth:680,margin:'0 auto',padding:'32px 24px',color:'var(--ui-text-primary)',fontSize:13},children:[
+    jsx('p',{style:{...muted,margin:'0 0 6px'},children:'Purikura'}),
+    jsx('h1',{style:{fontSize:26,fontWeight:600,letterSpacing:'-.025em',margin:'0 0 8px'},children:'People'}),
+    jsx('p',{style:{...muted,margin:'0 0 24px'},children:'A shared roster. Your own voice.'}),
+    jsxs('div',{style:cardStyle,children:[
+      jsx('h2',{style:{fontSize:14,fontWeight:600,margin:0},children:'Who’s speaking?'}),
+      jsx('p',{style:{...muted,margin:'4px 0 6px'},children:'Choose a person for messages from this device.'}),
+      jsx('ul',{style:{listStyle:'none',padding:0,margin:0},children:state.people.map(person=>jsx(RenamePerson,{person,save:mutation.mutate,pending:mutation.isPending,
+        selected:state.selected===person.id,choose:()=>controller.choose(person.id,state.scope)},person.id))}),
+      state.status==='ready'&&!state.people.length ? jsx('p',{style:muted,children:'No people yet. Add the first person below.'}):null,
+      jsx(ConnectionState,{state,query})]}),
+    jsxs('form',{style:{...cardStyle,marginTop:16},onSubmit:e=>{e.preventDefault();create()},children:[
+      jsx('h2',{style:{fontSize:14,fontWeight:600,margin:'0 0 16px'},children:'Add a person'}),
+      jsx('label',{htmlFor:'purikura-new-person',style:{display:'block',fontSize:12,marginBottom:6},children:'Display name'}),
+      jsxs('div',{style:rowStyle,children:[
+        jsx(Input,{id:'purikura-new-person','aria-label':'New person name',placeholder:'e.g. Alice',style:{flex:1,minWidth:120},value:name,maxLength:80,onChange:e=>setName(e.target.value)}),
+        jsx(Button,{type:'button','aria-label':'Create person',disabled:mutation.isPending || !state.scope || !validName(name),onClick:create,children:mutation.isPending?'Saving…':'Add person'})]})]}),
+    mutation.isError ? jsx('p',{role:'alert',style:muted,children:`Save failed: ${mutation.error.message}`}) : null,
+    jsx('p',{style:{...muted,marginTop:18},children:'Names sync across clients. Selection is not sign-in or memory separation.'})]})
 }
 export default {
   id:ID,name:'Purikura',defaultEnabled:false,description:'Shared People settings and per-device manual attribution.',

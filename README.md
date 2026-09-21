@@ -4,7 +4,7 @@ a cute, shared identity layer for Hermes Desktop.
 
 purikura keeps Hermes sessions unified while attaching the correct human identity to messages and, later, voice segments.
 
-Create and rename people in **People**. The roster syncs across clients; each device remembers its own selection per gateway/profile. A fresh roster starts with **User**.
+Create and rename people in **People** in Desktop or the web dashboard (`/purikura`). The roster syncs across clients; Desktop’s compact person selector remembers your choice per gateway/profile. A fresh roster starts with **User**.
 
 ## Install
 
@@ -22,7 +22,9 @@ hermes plugins install https://github.com/gyaru/purikura --enable
 
 Then restart that server's gateway/dashboard. Other desktops can select only **Desktop** once the shared backend is active. A 404 usually means the backend is missing, disabled, or needs a restart.
 
-Upgrading from `speaker-identity` or a copied install? Disable/remove the old UI to avoid duplicate tags, and keep `plugin-data/speaker-identity.sqlite3`; Purikura reuses it. A standalone copied Desktop folder is not automatically replaced by a unified package.
+**Update:** run `hermes plugins update purikura` on the server in the intended profile, then restart the process serving its dashboard/API. Update the Desktop installation on each client separately when connected remotely.
+
+**From speaker-identity:** run `hermes plugins disable speaker-identity` in that profile and disable its Desktop toggle on every client. This removes the old dashboard navigation on current Hermes and prevents duplicate message tags. Keep `plugin-data/speaker-identity.sqlite3`; Purikura reuses it. Do not delete the database or profile. A standalone copied Desktop folder is not automatically replaced by a unified package.
 
 ## Status
 

@@ -10,6 +10,19 @@ uv run --with pytest==8.3.5 --with fastapi==0.115.12 --with httpx==0.28.1 --with
 
 The frontend harness loads the actual uncompiled plugin with real React and React Query, mocking only the Hermes SDK bridge. It covers shared create/rename, real interval polling, independent clients, scoped persistence, stale responses, unavailable people, send-time validation, attachments and commands. This is not an Electron UI end-to-end test.
 
+## Browser UI and actual HTTP (optional)
+
+With a Hermes source checkout whose Node dependencies and dashboard assets are built, and a Python environment containing its server dependencies:
+
+```sh
+npx playwright install chromium
+HERMES_SOURCE=/path/to/hermes-agent HERMES_PYTHON=/path/to/hermes-agent/.venv/bin/python3 npm run test:browser
+```
+
+This runs the actual web dashboard route and a browser harness using Desktop’s real Button/Input components, styles and palette. Only the Desktop SDK bridge is mocked; both surfaces create and rename through an isolated assembled Hermes HTTP server. It checks reload persistence, compact status controls, narrow layout and light/dark rendering. It is **not an Electron app test**. Screenshots and `result.json` go to ignored `artifacts/` (override with `PURIKURA_ARTIFACTS`). Optional unrelated media/typography CSS is omitted from the harness.
+
+`tests/test_dashboard_http.py` also verifies discovery, script serving, authentication and profile isolation. Set `HERMES_PYTHON` for its server subprocess; the pytest runner needs pytest, FastAPI, httpx, PyYAML and Rich for all host integration tests.
+
 ## Actual Hermes installers (optional)
 
 Set `HERMES_SOURCE` to a Hermes source checkout. For Python, use an environment with that checkout's dependencies and pytest installed:
@@ -19,7 +32,7 @@ HERMES_SOURCE=/path/to/hermes-agent npm test
 HERMES_SOURCE=/path/to/hermes-agent python -m pytest tests -q
 ```
 
-Without `HERMES_SOURCE`, the two host integration tests explicitly skip; the portable root-contract test still runs. All integration installs use temporary homes and offline Git fixtures, never live plugins. Set `TMPDIR` if you need a specific scratch location.
+Without `HERMES_SOURCE`, the host integration tests explicitly skip; the portable root-contract test still runs. All integration installs use temporary homes and offline Git fixtures, never live plugins. Set `TMPDIR` if you need a specific scratch location.
 
 Validated against Hermes source `fca3221df48d4ae1e4db9e8a1a041de21ea4d9cf`:
 

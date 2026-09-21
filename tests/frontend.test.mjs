@@ -7,6 +7,15 @@ import {QueryClientProvider} from '@tanstack/react-query'
 globalThis.IS_REACT_ACT_ENVIRONMENT=true
 const tick=()=>new Promise(r=>setTimeout(r,20))
 
+test('status bar is only a compact person selector',async()=>{
+  const p=await loadPlugin();p.module.default.register(p.ctx);let tree
+  await act(async()=>{tree=create(React.createElement(QueryClientProvider,{client:p.queryClient},p.contributions.find(c=>c.area==='statusBar.right').render()));await tick()});await act(tick)
+  assert.equal(tree.root.findAllByType('button').length,0)
+  assert.equal(tree.root.findAllByProps({role:'status'}).length,0)
+  assert.equal(tree.root.findAllByType('select').length,1)
+  await act(async()=>tree.unmount());p.dispose()
+})
+
 test('unified Desktop package stays opt-in until enabled',async()=>{
   const p=await loadPlugin()
   assert.equal(p.module.default.defaultEnabled,false)
@@ -36,6 +45,9 @@ test('People page creates and renames shared people, selection stays local',asyn
   await act(tick)
   assert.equal(roster.length,2)
   const alice=roster.find(x=>x.display_name==='Alice')
+  assert.equal(tree.root.findAllByProps({role:'status'}).length,1)
+  assert.equal(tree.root.findAllByType('label').length,1)
+  await act(async()=>tree.root.findByProps({'aria-label':`Edit ${alice.display_name}`}).props.onClick())
   await act(async()=>tree.root.findByProps({'aria-label':`Name for ${alice.id}`}).props.onChange({target:{value:'Bob'}}))
   await act(async()=>tree.root.findByProps({'aria-label':`Rename ${alice.id}`}).props.onClick())
   await act(tick)

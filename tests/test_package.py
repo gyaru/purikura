@@ -25,7 +25,10 @@ def test_root_is_a_unified_hermes_package():
     module.register(object())  # API-only registration must have no side effects.
     assert (ROOT / 'desktop/plugin.js').is_file()
     dashboard = json.loads((ROOT / 'dashboard/manifest.json').read_text())
-    assert dashboard == {'name': 'purikura', 'api': 'plugin_api.py'}
+    assert dashboard['name'] == 'purikura'
+    assert dashboard['api'] == 'plugin_api.py'
+    assert dashboard['tab']['path'] == '/purikura'
+    assert (ROOT / 'dashboard' / dashboard['entry']).is_file()
     assert (ROOT / 'dashboard' / dashboard['api']).is_file()
 
 
@@ -42,7 +45,7 @@ def test_real_hermes_git_install_and_discovery(tmp_path, monkeypatch):
     # Snapshot uncommitted sources into an offline Git remote, never the live install.
     repo = tmp_path / 'source'
     shutil.copytree(ROOT, repo, ignore=shutil.ignore_patterns(
-        '.git', 'node_modules', '__pycache__', '.pytest_cache', '.venv'))
+        '.git', 'node_modules', '__pycache__', '.pytest_cache', '.venv', 'artifacts'))
     def git(*args):
         return subprocess.check_output(['git', '-C', str(repo), *args], text=True).strip()
     git('init', '-q')

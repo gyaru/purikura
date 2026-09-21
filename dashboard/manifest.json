@@ -1,4 +1,10 @@
 {
   "name": "purikura",
+  "label": "People",
+  "description": "Purikura shared people settings",
+  "icon": "Heart",
+  "version": "0.2.0",
+  "tab": {"path": "/purikura", "position": "end"},
+  "entry": "people.js",
   "api": "plugin_api.py"
 }

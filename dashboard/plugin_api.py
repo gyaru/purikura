@@ -15,9 +15,30 @@ from contextlib import closing
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
-router = APIRouter()
+
+async def _request_profile(profile: str | None = None):
+    """Plugin routes are not auto-scoped by the dashboard's management API.
+
+    Keep the ContextVar on the async request task; sync generator dependencies
+    run in separate worker contexts and cannot safely propagate/reset it.
+    """
+    if not profile:
+        yield
+        return
+    try:
+        from hermes_cli.web_server_profiles import _config_profile_scope
+        from hermes_cli.plugins_cmd import _get_enabled_set, _get_disabled_set
+    except ImportError:
+        raise HTTPException(400, 'Explicit profiles require a current Hermes dashboard')
+    with _config_profile_scope(profile):
+        if 'purikura' not in _get_enabled_set() or 'purikura' in _get_disabled_set():
+            raise HTTPException(403, 'Enable Purikura in the selected profile first')
+        yield
+
+
+router = APIRouter(dependencies=[Depends(_request_profile)])
 
 _LEGACY_DB_NAME = "speaker-identity.sqlite3"
 _ID_RE = re.compile(r"^[a-z][a-z0-9_:-]{0,63}$")
