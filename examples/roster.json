@@ -1,0 +1,6 @@
+{
+  "identities": [
+    {"id": "person:alice", "display_name": "Alice"},
+    {"id": "person:bob", "display_name": "Bob"}
+  ]
+}
