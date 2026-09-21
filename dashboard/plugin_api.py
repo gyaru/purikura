@@ -19,19 +19,22 @@ from fastapi import APIRouter, HTTPException
 
 router = APIRouter()
 
-_PLUGIN_ID = "speaker-identity"
+_LEGACY_DB_NAME = "speaker-identity.sqlite3"
 _ID_RE = re.compile(r"^[a-z][a-z0-9_:-]{0,63}$")
-_DEFAULT_IDENTITIES = (
-    ("person:user", "User"),
-)
 
 
 def _hermes_home() -> Path:
-    return Path(os.environ.get("HERMES_HOME", Path.home() / ".hermes")).expanduser()
+    # Hermes can scope a request using ContextVar, not just process environment.
+    try:
+        from hermes_constants import get_hermes_home
+    except ImportError:
+        # Standalone API tests; a real gateway supplies hermes_constants.
+        return Path(os.environ.get("HERMES_HOME", Path.home() / ".hermes")).expanduser()
+    return Path(get_hermes_home())
 
 
 def _db_path() -> Path:
-    path = _hermes_home() / "plugin-data" / f"{_PLUGIN_ID}.sqlite3"
+    path = _hermes_home() / "plugin-data" / _LEGACY_DB_NAME
     path.parent.mkdir(parents=True, exist_ok=True)
     return path
 
@@ -41,30 +44,31 @@ def _connect() -> sqlite3.Connection:
     connection.row_factory = sqlite3.Row
     connection.execute("PRAGMA busy_timeout = 10000")
     connection.execute("PRAGMA journal_mode = WAL")
-    connection.executescript(
-        """
-        CREATE TABLE IF NOT EXISTS identities (
+    # Keep the legacy filename: changing the public plugin slug must not orphan data.
+    connection.execute("BEGIN IMMEDIATE")
+    fresh = connection.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='identities'"
+    ).fetchone() is None
+    connection.execute(
+        """CREATE TABLE IF NOT EXISTS identities (
             id TEXT PRIMARY KEY,
             display_name TEXT NOT NULL,
             enabled INTEGER NOT NULL DEFAULT 1,
             updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-        );
-        CREATE TABLE IF NOT EXISTS devices (
+        )"""
+    )
+    connection.execute(
+        """CREATE TABLE IF NOT EXISTS devices (
             id TEXT PRIMARY KEY,
             default_identity_id TEXT NOT NULL,
             updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY(default_identity_id) REFERENCES identities(id)
-        );
-        """
+        )"""
     )
-    for identity_id, display_name in _DEFAULT_IDENTITIES:
+    if fresh:
         connection.execute(
-            """
-            INSERT INTO identities (id, display_name)
-            VALUES (?, ?)
-            ON CONFLICT(id) DO NOTHING
-            """,
-            (identity_id, display_name),
+            "INSERT INTO identities (id, display_name) VALUES (?, ?)",
+            ("person:user", "User"),
         )
     connection.commit()
     return connection
@@ -99,7 +103,9 @@ def state(device_id: str | None = None) -> dict[str, Any]:
         if device_id:
             device_id = _valid_id(device_id, "device_id")
             row = connection.execute(
-                "SELECT default_identity_id FROM devices WHERE id = ?",
+                "SELECT d.default_identity_id FROM devices d "
+                "JOIN identities i ON i.id = d.default_identity_id "
+                "WHERE d.id = ? AND i.enabled = 1",
                 (device_id,),
             ).fetchone()
             default_identity_id = row["default_identity_id"] if row else None
@@ -111,8 +117,9 @@ def upsert_identity(identity_id: str, body: dict[str, Any]) -> dict[str, Any]:
     """Create or rename an identity in the shared roster."""
     identity_id = _valid_id(identity_id, "identity_id")
     display_name = body.get("display_name")
-    if not isinstance(display_name, str) or not display_name.strip() or len(display_name) > 80:
-        raise HTTPException(status_code=400, detail="display_name must be 1-80 characters")
+    if (not isinstance(display_name, str) or not display_name.strip()
+            or len(display_name) > 80 or re.search(r"[\x00-\x1f\x7f\[\]]", display_name)):
+        raise HTTPException(status_code=400, detail="display_name must be 1-80 characters without brackets or control characters")
     display_name = display_name.strip()
 
     with closing(_connect()) as connection:
